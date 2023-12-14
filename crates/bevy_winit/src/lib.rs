@@ -130,7 +130,7 @@ impl Plugin for WinitPlugin {
 
         app.init_non_send_resource::<WinitWindows>()
             .init_resource::<WinitSettings>()
-            .set_runner(winit_runner)
+            .set_runner(winit_runner(|_| true))
             .add_systems(
                 Last,
                 (
@@ -344,11 +344,17 @@ impl Default for WinitAppRunnerState {
     }
 }
 
+pub fn winit_runner(
+    should_run_filter: impl FnMut(&mut App) -> bool + 'static,
+) -> impl FnOnce(App) + 'static {
+    |app| winit_runner_impl(app, should_run_filter)
+}
+
 /// The default [`App::runner`] for the [`WinitPlugin`] plugin.
 ///
 /// Overriding the app's [runner](bevy_app::App::runner) while using `WinitPlugin` will bypass the
 /// `EventLoop`.
-pub fn winit_runner(mut app: App) {
+fn winit_runner_impl(mut app: App, mut should_run_filter: impl FnMut(&mut App) -> bool + 'static) {
     if app.plugins_state() == PluginsState::Ready {
         app.finish();
         app.cleanup();
@@ -826,7 +832,10 @@ pub fn winit_runner(mut app: App) {
                         }
                     };
 
-                    if app.plugins_state() == PluginsState::Cleaned && should_update {
+                    if app.plugins_state() == PluginsState::Cleaned
+                        && should_update
+                        && should_run_filter(&mut app)
+                    {
                         // reset these on each update
                         runner_state.wait_elapsed = false;
                         runner_state.window_event_received = false;
